@@ -219,7 +219,7 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-yolov8n.pt
+yolov8s.pt
 *.png
 *.jpg
 *.jpeg
