@@ -4,7 +4,6 @@ from datetime import datetime
 import shutil
 import os
 
-from vision import generate_evidence_image, process_frame
 from intelligence import get_historical_context
 from rules import ParkingRuleEngine
 

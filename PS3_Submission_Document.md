@@ -30,7 +30,7 @@ This makes the system more useful than a basic detector because it moves from "w
 ## 3. Methodology
 
 ### 3.1 Vision and Scene Understanding
-The system ingests traffic-camera imagery with location and timestamp context. A real-time detector such as YOLOv8 localizes vehicles and road users, while preprocessing handles resizing, normalization, and image-quality checks. In later versions, this layer can include low-light enhancement, deblurring, and rain/shadow compensation.
+The system ingests traffic-camera imagery with location and timestamp context. A real-time detector such as YOLOv8 localizes vehicles and road users, while preprocessing handles resizing, normalization, and image-quality checks. This layer includes image-quality scoring, low-light enhancement via CLAHE, motion-blur estimation, and shadow normalization using illumination-invariant transforms.
 
 ### 3.2 Spatial Violation Reasoning
 Detected objects are evaluated against camera-specific or junction-specific semantic regions. For example:
@@ -62,9 +62,8 @@ The final violation class is determined by combining:
 This allows the system to classify violations into labels such as:
 
 - No Parking
-- Wrong Parking
-- Parking on Footpath
-- Parking in a Main Road
+- Footpath Parking
+- Carriageway Obstruction
 - Double Parking
 - Restricted Zone Violation
 
