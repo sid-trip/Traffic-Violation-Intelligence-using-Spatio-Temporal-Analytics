@@ -5,6 +5,8 @@ from datetime import datetime
 
 import pandas as pd
 
+from rules import resolve_zone_context
+
 
 GENERIC_LOCATION_TOKENS = {
     "and",
@@ -376,19 +378,78 @@ def _enrich_violations(violations, label_counts, sample_count):
     return enriched
 
 
+
+def _synthesize_risk_from_context(location_name, current_time, violations=None):
+    """Fallback risk score when historical CSVs are unavailable.
+
+    Uses the current zone type, time-of-day, and the number of violations
+    already inferred by the rule engine so the score still carries meaning.
+    """
+    violations = violations or []
+    zone_context = resolve_zone_context(location_name, current_time)
+    current_hour = datetime.strptime(current_time, "%H:%M").hour
+
+    zone_base = {
+        "active_carriageway": 78,
+        "no_parking_zone": 66,
+        "footpath": 72,
+        "restricted_zone": 64,
+    }.get(zone_context["zone_type"], 60)
+
+    # Peak traffic windows are higher risk because dwell-time violations are
+    # more operationally sensitive there.
+    is_peak_hour = 7 <= current_hour <= 10 or 17 <= current_hour <= 21
+    peak_bonus = 10 if is_peak_hour else 0
+
+    # Night-time parking can be less congested but still operationally risky.
+    if current_hour >= 22 or current_hour <= 5:
+        time_bonus = 4
+    else:
+        time_bonus = 0
+
+    violation_bonus = min(18, len(violations) * 6)
+
+    # If the rule window itself is inactive, the risk should stay lower even
+    # when the zone type is normally sensitive.
+    activation_penalty = 0 if zone_context["rule_active"] else -8
+
+    risk_score = zone_base + peak_bonus + time_bonus + violation_bonus + activation_penalty
+    risk_score = max(20, min(95, risk_score))
+
+    if risk_score >= 85:
+        recommendation = "CRITICAL: Recommend tow-truck dispatch and on-ground intervention"
+    elif risk_score >= 65:
+        recommendation = "WARNING: Alert nearest patrol and monitor queue buildup"
+    elif risk_score >= 45:
+        recommendation = "ELEVATED: Monitor closely and keep response unit on standby"
+    else:
+        recommendation = "NORMAL: Monitor via CCTV and log recurring patterns"
+
+    return {
+        "risk_score": int(risk_score),
+        "historical_count": 0,
+        "location_match_scope": f"synthetic:{zone_context['zone_type']}",
+        "matched_location_tokens": [],
+        "top_historical_violation_types": [],
+        "predicted_congestion_hotspot": risk_score >= 70,
+        "incident_count": len(violations),
+        "incident_match_scope": "synthetic",
+        "top_event_causes": [],
+        "recommendation": recommendation,
+        "enriched_violations": violations,
+        "zone_context": zone_context,
+        "risk_basis": {
+            "zone_type": zone_context["zone_type"],
+            "is_peak_hour": is_peak_hour,
+            "current_hour": current_hour,
+            "violation_count": len(violations),
+        },
+    }
+
+
 def get_historical_context(location_name, current_time, violations=None):
     if VIOLATION_DF is None:
-        return {
-            "risk_score": 30,
-            "historical_count": 0,
-            "location_match_scope": "unavailable",
-            "top_historical_violation_types": [],
-            "predicted_congestion_hotspot": False,
-            "incident_count": 0,
-            "top_event_causes": [],
-            "recommendation": "Historical data unavailable",
-            "enriched_violations": violations or [],
-        }
+        return _synthesize_risk_from_context(location_name, current_time, violations)
 
     current_hour = datetime.strptime(current_time, "%H:%M").hour
     violation_slice = _extract_local_violation_slice(location_name, current_hour)
