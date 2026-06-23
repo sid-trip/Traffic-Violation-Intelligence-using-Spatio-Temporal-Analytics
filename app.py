@@ -629,7 +629,24 @@ with st.sidebar:
             else:
                 st.error("Could not open the uploaded video.")
         else:
-            st.write("Status: Upload a video to begin.")
+            if os.path.exists("test_video.mp4"):
+                video_path_cached = os.path.abspath("test_video.mp4")
+                current_fingerprint = ("test_video.mp4", os.path.getsize(video_path_cached), video_sample_fps, dwell_threshold_seconds)
+                capture = cv2.VideoCapture(video_path_cached)
+                
+                if capture.isOpened():
+                    ok, first_frame = capture.read()
+                    capture.release()
+                    if ok and first_frame is not None:
+                        source_frame = resize_to_max_width(first_frame)
+                        source_image_pil = Image.fromarray(cv2.cvtColor(source_frame, cv2.COLOR_BGR2RGB))
+                        st.write("Status: Operating on default video (test_video.mp4).")
+                    else:
+                        st.error("test_video.mp4 could not be read.")
+                else:
+                    st.error("test_video.mp4 could not be opened.")
+            else:
+                st.write("Status: Direct video upload required. (test_video.mp4 not located).")
 
 if source_frame is None or source_image_pil is None:
     st.info("Awaiting input. Select a target node and provide source media in the sidebar to begin.")
